@@ -1,0 +1,21 @@
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phi4-finance"
+version = "0.1.0"
+description = "phi^4 Quantum Field Theory for financial time series - implementation of Bachtis et al. Physica A 2026"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name="Saul Ochoa"}]
+keywords = ["econophysics", "qft", "phi4", "finance", "time-series"]
+dependencies = ["numpy>=1.23", "pandas>=1.5", "yfinance>=0.2", "matplotlib>=3.5", "tqdm", "scipy"]
+[project.optional-dependencies]
+torch = ["torch>=2.0"]
+dev = ["pytest", "jupyter"]
+
+[project.urls]
+Homepage = "https://github.com/saulochoasalasar/phi4-finance"
