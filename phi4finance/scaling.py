@@ -33,6 +33,18 @@ class ScalingResult:
     statistic: str
     raw: dict = field(default_factory=dict, repr=False)
 
+    def exponents(self, statistic: str = "mean") -> dict:
+        """k_w, k_a (and standard errors) for either statistic, from ``raw``."""
+        key = {"mean": ("w", "a"), "absmean": ("w_abs", "a_abs")}[statistic]
+        vols = np.array(sorted(self.raw))
+        out = {}
+        for name, k in zip(("w", "a"), key):
+            vals = np.array([np.mean(self.raw[v][k]) for v in vols])
+            out[f"k_{name}"], out[f"k_{name}_err"] = fit_exponent(vols, vals)
+            out[f"{name}_values"] = vals
+        out["volumes"] = vols
+        return out
+
 
 def fit_exponent(volumes, values):
     """Least-squares slope of log(values) vs log(volumes) and its standard error.
@@ -57,7 +69,7 @@ def _stat(x, statistic):
 
 def scaling_analysis(full_returns, volumes=(16, 32, 48), n_iter=(100, 40, 40),
                      method: str = "pl", epochs: int = 200, mcmc_steps: int = 100,
-                     lr: float = 5e-3, l2: float = 0.0, statistic: str = "mean",
+                     lr: float = 5e-3, l2: float = 0.0, n_grid: int = 201, statistic: str = "mean",
                      seed: int = 0, verbose: bool = True) -> ScalingResult:
     """Scaling exponents k_w and k_a.
 
@@ -85,15 +97,20 @@ def scaling_analysis(full_returns, volumes=(16, 32, 48), n_iter=(100, 40, 40),
     rng = np.random.default_rng(seed)
 
     base = Phi4Model(V_full, lr=lr, mu_global=True, lam_global=True, seed=seed)
-    fit_kw = {"method": method, "epochs": epochs, "mcmc_steps": mcmc_steps, "l2": l2}
+    fit_kw = {"method": method, "epochs": epochs, "mcmc_steps": mcmc_steps, "l2": l2, "n_grid": n_grid}
     base.fit(X, verbose=verbose, **fit_kw)
     mu_g, lam_g = float(base.mu.mean()), float(base.lam.mean())
     iu_full = np.triu_indices(V_full, 1)
 
-    raw = {V_full: {"w": [_stat(base.W[iu_full], statistic)], "a": [_stat(base.a, statistic)]}}
+    def stats(W, a, iu):
+        return {"w": _stat(W[iu], "mean"), "a": _stat(a, "mean"),
+                "w_abs": _stat(W[iu], "absmean"), "a_abs": _stat(a, "absmean")}
+
+    wk, ak = ("w", "a") if statistic == "mean" else ("w_abs", "a_abs")
+    raw = {V_full: {k: [v] for k, v in stats(base.W, base.a, iu_full).items()}}
     for V, n in zip(volumes, n_iter):
         iu = np.triu_indices(V, 1)
-        ws, as_ = [], []
+        acc = {"w": [], "a": [], "w_abs": [], "a_abs": []}
         for _ in range(n):
             idx = rng.choice(V_full, V, replace=False)
             m = Phi4Model(V, lr=lr, mu_global=True, lam_global=True,
@@ -101,17 +118,20 @@ def scaling_analysis(full_returns, volumes=(16, 32, 48), n_iter=(100, 40, 40),
             m.mu[:] = mu_g
             m.lam[:] = lam_g
             m.fit(X[:, idx], verbose=False, **fit_kw)
-            ws.append(_stat(m.W[iu], statistic))
-            as_.append(_stat(m.a, statistic))
-        raw[V] = {"w": ws, "a": as_}
+            for k, v in stats(m.W, m.a, iu).items():
+                acc[k].append(v)
+        raw[V] = acc
         if verbose:
-            print(f"V={V:4d}  <w>={np.mean(ws):+.5f}  <a>={np.mean(as_):+.5f}  (n={n})")
+            print(f"V={V:4d}  <w>={np.mean(acc['w']):+.5f}  <a>={np.mean(acc['a']):+.5f}  "
+                  f"<|w|>={np.mean(acc['w_abs']):.5f}  <|a|>={np.mean(acc['a_abs']):.5f}  (n={n})")
 
     vols = np.array(sorted(raw))
     agg = lambda key, f: np.array([f(raw[v][key]) for v in vols])
     sem = lambda x: float(np.std(x, ddof=1) / np.sqrt(len(x))) if len(x) > 1 else float("nan")
-    w_mean, a_mean = agg("w", np.mean), agg("a", np.mean)
-    k_w, k_w_err = fit_exponent(vols, w_mean)
-    k_a, k_a_err = fit_exponent(vols, a_mean)
-    return ScalingResult(vols, w_mean, agg("w", sem), a_mean, agg("a", sem),
+    w_mean, a_mean = agg(wk, np.mean), agg(ak, np.mean)
+    with warnings.catch_warnings():
+        warnings.simplefilter("default")
+        k_w, k_w_err = fit_exponent(vols, w_mean)
+        k_a, k_a_err = fit_exponent(vols, a_mean)
+    return ScalingResult(vols, w_mean, agg(wk, sem), a_mean, agg(ak, sem),
                          k_w, k_w_err, k_a, k_a_err, mu_g, lam_g, statistic, raw)

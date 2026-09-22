@@ -4,12 +4,13 @@ Implementation of Bachtis, Berman & Schelpe, "Modeling financial time series
 with phi^4 quantum field theory", Physica A 701 (2026) 132033,
 doi:10.1016/j.physa.2026.132033.
 """
-from .data import load_returns
+from .data import load_prices, load_returns
 from .inference import ConditionalDistribution
 from .model import Phi4Model
 from .preprocessing import Scaler, lag_embed
+from .rolling import RollingPhi4
 from .sampler import HeatBathSampler, MetropolisSampler
 
 __all__ = ["Phi4Model", "MetropolisSampler", "HeatBathSampler", "ConditionalDistribution",
-           "Scaler", "lag_embed", "load_returns"]
-__version__ = "0.3.0"
+           "RollingPhi4", "Scaler", "lag_embed", "load_prices", "load_returns"]
+__version__ = "0.4.0"

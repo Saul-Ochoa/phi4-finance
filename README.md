@@ -68,6 +68,12 @@ Next-day forecasting from a stock's own history (Section 3.5) uses `lag_embed` a
 `examples/02_forecast.py`. With 150 lags and 80 training rows the model has 11,175 couplings, so a strong L2
 penalty (`l2=`) chosen on validation data is essential.
 
+## Reproducing the paper
+
+`notebooks/reproduce_bachtis2026.ipynb` reruns Fig. 1–6, 9 and 11 with public Yahoo Finance data, with the
+paper's numbers next to the reproduced ones and extra baselines (zero forecast, OLS, ridge AR). See
+`notebooks/README.md`.
+
 ## Structure
 
 | Module | Contents |
@@ -77,9 +83,13 @@ penalty (`l2=`) chosen on validation data is essential.
 | `phi4finance/inference.py` | `ConditionalDistribution`, exact one-site conditionals |
 | `phi4finance/sampler.py` | `MetropolisSampler`, `HeatBathSampler`: multi-chain, local ΔS, clamped sites |
 | `phi4finance/preprocessing.py` | `Scaler` (minmax, absmax), `lag_embed` |
-| `phi4finance/data.py` | `load_returns` (Yahoo Finance, optional) |
-| `phi4finance/metrics.py` | market mean and kurtosis, binarization, SMA, magnetization, susceptibility |
+| `phi4finance/data.py` | `load_prices`, `load_returns` (Yahoo Finance, optional; CSV cache) |
+| `phi4finance/metrics.py` | market mean and kurtosis, binarization, SMA, sign agreement, MAE, coverage |
 | `phi4finance/scaling.py` | finite-size scaling exponents `k_w`, `k_a` (Section 3.3) |
+| `phi4finance/rolling.py` | `RollingPhi4`: one theory per date, warm-started, with sampled market statistics |
+| `phi4finance/baselines.py` | baseline R (eq. 10), OLS, rolling AR, ridge AR |
+| `phi4finance/validation.py` | `select_l2`: L2 penalty chosen on held-out rows |
+| `notebooks/` | reproduction of the paper |
 | `examples/` | 01 multi-stock fit, 02 next-day forecast, 03 imputation vs baseline R |
 | `tests/` | pytest suite: recovery of known couplings (PL and ML), gradient checks, exact vs MCMC |
 | `benchmarks/` | timing at the paper's forecasting size (V = 150, N = 80) |
@@ -93,6 +103,5 @@ pytest
 
 ## Status
 
-v0.3.0 adds pseudo-likelihood training, exact one-site conditionals and a multi-chain sampler (see
-`CHANGELOG.md`). Next: reproduction of the paper's figures with public data (v0.4), then regularization,
-Toeplitz couplings for the time-lag model and a full backtest module (v0.5).
+v0.4.0 adds the tools and the notebook to reproduce the paper (see `CHANGELOG.md`). Next (v0.5): Toeplitz couplings
+for the time-lag model, stronger regularization and a full backtest module.

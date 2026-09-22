@@ -11,3 +11,5 @@ venv/
 .idea/
 # Publisher PDF (copyrighted) - keep locally, cite by DOI instead
 paper/
+# Yahoo price cache written by the notebooks
+notebooks/data/

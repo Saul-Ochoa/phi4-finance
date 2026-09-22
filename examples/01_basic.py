@@ -38,10 +38,13 @@ def main():
     print(f"mean cross-sectional kurtosis  data={market_kurtosis(train).mean():.2f}  "
           f"phi4={market_kurtosis(sims).mean():.2f}  binarised={k_bin:.2f}")
 
+    # w_ij tracks the PARTIAL correlation (Gaussian limit: precision = 2(diag(mu) - W))
     iu = np.triu_indices(len(TICKERS), 1)
-    corr = np.corrcoef(X.T)[iu]
-    agree = np.mean(np.sign(model.W[iu]) == np.sign(corr))
-    print(f"sign(w_ij) agrees with sign(corr_ij) on {agree:.0%} of pairs")
+    theta = np.linalg.inv(np.cov(X.T))
+    pcorr = -theta / np.sqrt(np.outer(np.diag(theta), np.diag(theta)))
+    for name, ref in [("correlation", np.corrcoef(X.T)), ("partial correlation", pcorr)]:
+        agree = np.mean(np.sign(model.W[iu]) == np.sign(ref[iu]))
+        print(f"sign(w_ij) agrees with sign of {name} on {agree:.0%} of pairs")
 
 
 if __name__ == "__main__":

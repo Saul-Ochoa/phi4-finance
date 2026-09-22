@@ -82,21 +82,34 @@ def neg_pseudo_loglik(p, X, grid, l2=0.0, chunk_elems=4_000_000):
     dx = float(grid[1] - grid[0])
     rows = max(1, int(chunk_elems // (V * G)))
 
+    # B[i, g] = -mu_i g^2 - lam_i g^4 does not depend on the row; the per-row
+    # shift |h| * max|g| + max_g B[i] bounds the exponent from above, so exp()
+    # cannot overflow and no max-reduction over the grid is needed.
+    B = -mu[:, None] * g2 - lam[:, None] * g4                        # (V, G)
+    Bmax = B.max(axis=1)
+    gabs = float(np.abs(grid).max())
+
     total = 0.0
     R_T_X = np.zeros((V, V))
     ga = np.zeros(V); gmu = np.zeros(V); glam = np.zeros(V)
     for s in range(0, N, rows):
         x = X[s:s + rows]
         H = a + 2.0 * (x @ W)                                        # (n, V)
-        L = H[..., None] * g1 - mu[:, None] * g2 - lam[:, None] * g4  # (n, V, G)
-        Lmax = L.max(axis=-1, keepdims=True)
-        P = np.exp(L - Lmax)
-        Z = P.sum(axis=-1, keepdims=True)
-        P /= Z
-        logZ = (Lmax + np.log(Z))[..., 0] + np.log(dx)   # midpoint rule: Z ≈ dx * sum
+        shift = np.abs(H) * gabs + Bmax                              # (n, V)
+        L = H[..., None] * g1                                        # (n, V, G)
+        L += B
+        L -= shift[..., None]
+        np.exp(L, out=L)
+        Z = L.sum(axis=-1)
+        if not (Z > 1e-280).all():                                   # extreme couplings: exact max
+            L = H[..., None] * g1 + B
+            shift = L.max(axis=-1)
+            L = np.exp(L - shift[..., None])
+            Z = L.sum(axis=-1)
+        logZ = shift + np.log(Z) + np.log(dx)                        # midpoint rule: Z = dx * sum
+        E1, E2, E4 = (L @ g1) / Z, (L @ g2) / Z, (L @ g4) / Z
         x2, x4 = x**2, x**4
         total += float((H * x - mu * x2 - lam * x4 - logZ).sum())
-        E1, E2, E4 = P @ g1, P @ g2, P @ g4
         r = x - E1
         R_T_X += r.T @ x
         ga += r.sum(0)

@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.4.0 — 2026-09-22
+
+Reproduction release: everything needed to rerun the paper with public data.
+
+### Added
+- `notebooks/reproduce_bachtis2026.ipynb`: §3.1–3.5 (Fig. 1–6, 9, 11) with Yahoo Finance data, a `FULL` switch
+  for paper-scale settings, the paper's numbers beside the reproduced ones, and every deviation stated. Committed
+  without outputs.
+- `RollingPhi4`: one theory per date on a rolling window, warm-started, recording coupling summaries and data vs
+  model market mean and kurtosis (Fig. 1).
+- `phi4finance.baselines`: rescaled mean R (eq. 10), OLS, rolling AR (the paper's linear-regression baseline),
+  ridge AR on the same lags as φ⁴.
+- `phi4finance.validation.select_l2`: L2 chosen on held-out rows, warm-started from strong to weak penalty.
+- Metrics: `sign_product_matrix`, `sign_agreement`, `mae`, `mae_se`, `coverage`, `hit_rate`.
+- `load_prices` with a CSV cache (`cache_dir`), `adjusted=` switch and removal of tickers with short history;
+  `load_returns` forwards them.
+- `ScalingResult.exponents(statistic)`: signed and absolute means from one run; `scaling_analysis(n_grid=)`.
+- 5 new tests (41 total).
+
+### Changed
+- Pseudo-likelihood objective about 2× faster (analytic upper bound instead of a max-reduction over the grid,
+  in-place exponentials, exact fallback for extreme couplings).
+
+### Notes from building the notebook
+- sgn(w_ij) should be compared with **partial** correlations: in the Gaussian limit the precision matrix is
+  2(diag μ − W). On synthetic one-factor data, sgn(w) matched the partial-correlation signs on 100% of pairs and the
+  plain-correlation signs on 73%.
+- k_w ≈ −1 is what a one-factor market predicts (precision off-diagonals shrink as 1/V). The notebook adds this
+  null and the Gaussian limit as benchmarks for the paper's exponents.
+
 ## 0.3.0 — 2026-09-22
 
 Speed release: training without MCMC, exact one-site conditionals, multi-chain sampling.
