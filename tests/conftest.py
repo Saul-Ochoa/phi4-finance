@@ -4,7 +4,7 @@ import pytest
 GRID = np.linspace(-1.5, 1.5, 601)
 
 
-def exact_gibbs(W, mu, lam, a, n_chains=2000, sweeps=150, seed=0):
+def exact_gibbs(W, mu, lam, a, n_chains=2000, sweeps=40, seed=0):
     """Independent reference sampler: heat-bath Gibbs drawing each site from its
     exact 1-D conditional on a grid over [-1.5, 1.5], vectorised over chains."""
     rng = np.random.default_rng(seed)

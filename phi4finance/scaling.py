@@ -56,8 +56,9 @@ def _stat(x, statistic):
 
 
 def scaling_analysis(full_returns, volumes=(16, 32, 48), n_iter=(100, 40, 40),
-                     epochs: int = 200, mcmc_steps: int = 600, lr: float = 5e-3,
-                     statistic: str = "mean", seed: int = 0, verbose: bool = True) -> ScalingResult:
+                     method: str = "pl", epochs: int = 200, mcmc_steps: int = 100,
+                     lr: float = 5e-3, l2: float = 0.0, statistic: str = "mean",
+                     seed: int = 0, verbose: bool = True) -> ScalingResult:
     """Scaling exponents k_w and k_a.
 
     Parameters
@@ -66,6 +67,8 @@ def scaling_analysis(full_returns, volumes=(16, 32, 48), n_iter=(100, 40, 40),
     volumes : subset sizes V' < V_full. The full volume is added automatically.
     n_iter : random subsets per volume (int or one per volume). The paper uses
         100, 40, 40 for V' = 16, 32, 48.
+    method : estimator passed to ``Phi4Model.fit`` (``"pl"`` or ``"ml"``);
+        ``epochs``, ``mcmc_steps`` and ``lr`` only apply to ``"ml"``.
     statistic : ``"mean"`` is the paper's signed average <w_ij> (upper
         triangle, i < j) and <a_i>; ``"absmean"`` averages magnitudes.
     """
@@ -82,7 +85,8 @@ def scaling_analysis(full_returns, volumes=(16, 32, 48), n_iter=(100, 40, 40),
     rng = np.random.default_rng(seed)
 
     base = Phi4Model(V_full, lr=lr, mu_global=True, lam_global=True, seed=seed)
-    base.fit(X, epochs=epochs, mcmc_steps=mcmc_steps, verbose=verbose)
+    fit_kw = {"method": method, "epochs": epochs, "mcmc_steps": mcmc_steps, "l2": l2}
+    base.fit(X, verbose=verbose, **fit_kw)
     mu_g, lam_g = float(base.mu.mean()), float(base.lam.mean())
     iu_full = np.triu_indices(V_full, 1)
 
@@ -96,7 +100,7 @@ def scaling_analysis(full_returns, volumes=(16, 32, 48), n_iter=(100, 40, 40),
                           seed=int(rng.integers(2**31)), freeze=("mu", "lam"))
             m.mu[:] = mu_g
             m.lam[:] = lam_g
-            m.fit(X[:, idx], epochs=epochs, mcmc_steps=mcmc_steps, verbose=False)
+            m.fit(X[:, idx], verbose=False, **fit_kw)
             ws.append(_stat(m.W[iu], statistic))
             as_.append(_stat(m.a, statistic))
         raw[V] = {"w": ws, "a": as_}

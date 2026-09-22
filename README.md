@@ -20,10 +20,21 @@ its distribution.
 S(φ) = − Σ_ij w_ij φ_i φ_j + Σ_i μ_i φ_i² + Σ_i λ_i φ_i⁴ − Σ_i a_i φ_i,     p(φ) = exp(−S) / Z
 ```
 
-The couplings are learned by maximum likelihood (eq. 5 of the paper) with Metropolis estimates of the model
-expectations. Proposals are uniform on `[−proposal_range/2, proposal_range/2]` (default `[−1.5, 1.5]`, as in
-the paper), so the sampled distribution is `exp(−S)` **truncated to that hypercube**. Scale returns into
-roughly `[−1, 1]` first.
+Two estimators:
+
+- `fit(X, method="pl")` (default): maximum pseudo-likelihood. Each one-site conditional is a 1-D density whose
+  normaliser is computed by quadrature, so the objective and its gradient are exact and no MCMC is needed.
+- `fit(X, method="ml")`: the paper's maximum likelihood (eq. 5), with persistent parallel Metropolis chains for the
+  model expectations. `fit` continues from the current couplings, so `pl` then `ml` refines a PL solution.
+
+Sampling runs `n_chains` chains at once (`sampler="metropolis"`, the paper's uniform proposal, or
+`"heatbath"`, exact Gibbs). All samplers work on `[−proposal_range/2, proposal_range/2]` (default `[−1.5, 1.5]`,
+as in the paper), so the distribution is `exp(−S)` **truncated to that hypercube**. Scale returns into roughly
+`[−1, 1]` first.
+
+When every site but one is known — the next-day forecast of Section 3.5, or imputing one stock from all the
+others — `conditional_distribution` / `forecast_distribution` return that conditional exactly (mean, std,
+quantiles, intervals, pdf, samples) without MCMC.
 
 ## Install
 
@@ -42,29 +53,36 @@ rets = load_returns(["AAPL", "MSFT", "NVDA"], period="5y")   # return units
 train = rets.iloc[:-20]                                        # keep the last 20 days out
 
 scaler = Scaler("absmax").fit(train)                           # fit on training data only
-model = Phi4Model(n_stocks=3, lr=0.01, mu_global=False, lam_global=False)
-model.fit(scaler.transform(train).to_numpy(), epochs=400, mcmc_steps=400)
+model = Phi4Model(n_stocks=3, mu_global=False, lam_global=False)
+model.fit(scaler.transform(train).to_numpy())                  # pseudo-likelihood
 
-# p(NVDA | AAPL = +1%, MSFT = −0.5%), inputs and samples in return units
-samples = model.predict_conditional({0: 0.01, 1: -0.005}, target_idx=2, scaler=scaler)
-print(samples.mean(), samples.std())
+# p(NVDA | AAPL = +1%, MSFT = −0.5%): exact, in return units
+d = model.conditional_distribution({0: 0.01, 1: -0.005}, 2, scaler=scaler)
+print(d.mean(), d.std(), d.interval(0.9))
+
+# p(NVDA, MSFT | AAPL = +1%): two free sites -> MCMC samples
+s = model.predict_conditional({0: 0.01}, target_idx=[1, 2], scaler=scaler)
 ```
 
-Next-day forecasting from a stock's own history (Section 3.5) uses `lag_embed` and `forecast_next_day`; see
-`examples/02_forecast.py`.
+Next-day forecasting from a stock's own history (Section 3.5) uses `lag_embed` and `forecast_distribution`; see
+`examples/02_forecast.py`. With 150 lags and 80 training rows the model has 11,175 couplings, so a strong L2
+penalty (`l2=`) chosen on validation data is essential.
 
 ## Structure
 
 | Module | Contents |
 | --- | --- |
-| `phi4finance/model.py` | `Phi4Model`: training, sampling, conditional prediction, forecasting |
-| `phi4finance/sampler.py` | `MetropolisSampler` with local ΔS and conditional (clamped) sampling |
+| `phi4finance/model.py` | `Phi4Model`: training (`pl` / `ml`), sampling, conditional prediction, forecasting |
+| `phi4finance/estimators.py` | pseudo-likelihood objective, exact gradient, L-BFGS fit |
+| `phi4finance/inference.py` | `ConditionalDistribution`, exact one-site conditionals |
+| `phi4finance/sampler.py` | `MetropolisSampler`, `HeatBathSampler`: multi-chain, local ΔS, clamped sites |
 | `phi4finance/preprocessing.py` | `Scaler` (minmax, absmax), `lag_embed` |
 | `phi4finance/data.py` | `load_returns` (Yahoo Finance, optional) |
 | `phi4finance/metrics.py` | market mean and kurtosis, binarization, SMA, magnetization, susceptibility |
 | `phi4finance/scaling.py` | finite-size scaling exponents `k_w`, `k_a` (Section 3.3) |
 | `examples/` | 01 multi-stock fit, 02 next-day forecast, 03 imputation vs baseline R |
-| `tests/` | pytest suite, including recovery of known couplings from synthetic φ⁴ data |
+| `tests/` | pytest suite: recovery of known couplings (PL and ML), gradient checks, exact vs MCMC |
+| `benchmarks/` | timing at the paper's forecasting size (V = 150, N = 80) |
 
 ## Tests
 
@@ -75,5 +93,6 @@ pytest
 
 ## Status
 
-v0.2.0 fixes the correctness issues of v0.1 (see `CHANGELOG.md`). Next: a vectorized sampler,
-pseudo-likelihood training and exact one-site conditionals (v0.3), then reproduction of the paper's figures.
+v0.3.0 adds pseudo-likelihood training, exact one-site conditionals and a multi-chain sampler (see
+`CHANGELOG.md`). Next: reproduction of the paper's figures with public data (v0.4), then regularization,
+Toeplitz couplings for the time-lag model and a full backtest module (v0.5).

@@ -15,15 +15,15 @@ def main():
     train, test = rets.iloc[-(TRAIN_DAYS + TEST_DAYS):-TEST_DAYS], rets.iloc[-TEST_DAYS:]
     scaler = Scaler("absmax").fit(train)
 
-    model = Phi4Model(n_stocks=3, lr=0.01, mu_global=False, lam_global=False, seed=0)
-    model.fit(scaler.transform(train).to_numpy(), epochs=400, mcmc_steps=400)
+    model = Phi4Model(n_stocks=3, mu_global=False, lam_global=False, seed=0)
+    model.fit(scaler.transform(train).to_numpy(), method="pl")
 
     sd = train.std()
     phi4, base = [], []
     for _, row in test.iterrows():
-        s = model.predict_conditional({0: row["AAPL"], 1: row["MSFT"]}, target_idx=2,
-                                      n_samples=2000, burn=200, scaler=scaler)
-        phi4.append(s.mean())
+        # both other sites known -> exact 1-D conditional, no MCMC
+        d = model.conditional_distribution({0: row["AAPL"], 1: row["MSFT"]}, 2, scaler=scaler)
+        phi4.append(d.mean())
         base.append(sd["NVDA"] / 2 * (row["AAPL"] / sd["AAPL"] + row["MSFT"] / sd["MSFT"]))
     y = test["NVDA"].to_numpy()
     print(f"MAE phi4 = {np.abs(np.array(phi4) - y).mean():.4f}")

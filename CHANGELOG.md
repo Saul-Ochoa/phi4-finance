@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.3.0 — 2026-09-22
+
+Speed release: training without MCMC, exact one-site conditionals, multi-chain sampling.
+
+### Added
+- **Pseudo-likelihood estimator** (`fit(method="pl")`, now the default): exact objective and gradient via 1-D
+  quadrature, L-BFGS-B, optional L2 on W, respects `mu_global`, `lam_global`, `freeze`, `lam_min`. On synthetic
+  φ⁴ data it recovers W with corr > 0.95; at V = 150, N = 80 it fits in ~15–20 s.
+- **Exact conditionals**: `conditional_distribution`, `forecast_distribution` and the `ConditionalDistribution`
+  class (mean, std, moments, pdf, cdf, quantile, interval, sample, affine change of units). Used automatically by
+  `predict_conditional` / `forecast_next_day` (`method="auto"`) when only one site is free; a next-day forecast at
+  V = 150 takes < 1 ms instead of ~0.1 s of MCMC.
+- **Multi-chain samplers**: `MetropolisSampler(..., n_chains=C)` updates a site in all chains with one numpy step;
+  new `HeatBathSampler` (exact Gibbs on a grid). `Phi4Model(sampler=..., n_chains=32)`.
+- **Persistent chains** (PCD) in `fit(method="ml")`: burn-in only when a chain starts fresh.
+- `l2=` penalty for `method="ml"` as well; `fit` continues from current couplings, so `pl` → `ml` refines.
+- `scaling_analysis(method="pl")` (default) and `l2=`.
+- `benchmarks/bench_v03.py`; 12 new tests (finite-difference gradient check, PL = exact log-density for one
+  site, Metropolis vs heat-bath, exact vs MCMC conditionals, PL recovery, PL options).
+
+### Changed
+- `fit` defaults to `method="pl"`; pass `method="ml"` for the paper's estimator. `mcmc_steps` is now sweeps per
+  chain per epoch (default 100).
+- `sample` returns rows interleaved across chains; `last_state` has shape `(n_chains, V)`; `init` accepts
+  `(V,)` or `(n_chains, V)`.
+- Single-chain Metropolis uses a scalar loop (about 2× faster than 0.2.0); with 64 chains a chain-sweep at
+  V = 150 costs about 1/15 of 0.2.0's (timings vary with machine load).
+
+### Found while testing
+- In the forecasting set-up (150 lags, 80 rows, 11,175 couplings) the fit overfits unless W is regularised
+  strongly: on synthetic i.i.d. returns, `l2=1e-3` gave 37% coverage for the 90% interval and a worse MAE than the
+  zero forecast; `l2=1` gave 88% and matched it. `examples/02_forecast.py` uses `l2=0.5`; choose it on validation
+  data.
+
 ## 0.2.0 — 2026-09-22
 
 Correctness release. Results produced with 0.1.0 should be discarded.

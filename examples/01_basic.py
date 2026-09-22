@@ -20,10 +20,12 @@ def main():
     scaler = Scaler("absmax").fit(train)
     X = scaler.transform(train).to_numpy()
 
-    model = Phi4Model(n_stocks=len(TICKERS), lr=0.01, mu_global=True, lam_global=True, seed=0)
-    model.fit(X, epochs=400, mcmc_steps=600, batch_size=256)
+    model = Phi4Model(n_stocks=len(TICKERS), mu_global=True, lam_global=True, seed=0)
+    model.fit(X, method="pl")                      # pseudo-likelihood: seconds, no MCMC
+    # optional likelihood refinement from the PL solution (the paper's estimator):
+    # model.fit(X, method="ml", epochs=200, mcmc_steps=30)
 
-    # p(AAPL | ABT = +1%, AMGN = -1%), other 17 stocks marginalised
+    # p(AAPL | ABT = +1%, AMGN = -1%), other 17 stocks marginalised by MCMC
     aapl = model.predict_conditional({0: 0.01, 1: -0.01}, target_idx=19,
                                      n_samples=3000, burn=500, scaler=scaler)
     print(f"AAPL | ABT=+1%, AMGN=-1%: mean={aapl.mean():+.4%}  std={aapl.std():.4%}")
