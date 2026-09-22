@@ -13,3 +13,4 @@ venv/
 paper/
 # Yahoo price cache written by the notebooks
 notebooks/data/
+notebooks/results/

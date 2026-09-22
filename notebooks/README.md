@@ -3,13 +3,14 @@
 | Notebook | What it does |
 | --- | --- |
 | `reproduce_bachtis2026.ipynb` | Reruns every empirical result of Bachtis, Berman & Schelpe (2026) — Fig. 1–6, 9 and 11 — with public Yahoo Finance data |
+| `mag7_ultimos_6_meses.ipynb` | (Spanish) The Magnificent 7 over the 6 months up to the run date: learned structure, rolling couplings, same-day imputation and next-day forecasts, all out of sample against OLS / zero / ridge / AR(1) baselines; exports a summary CSV to `results/` |
 
 ## Run
 
 ```bash
 pip install -e ".[notebooks]"      # from the repository root
 cd notebooks
-jupyter lab reproduce_bachtis2026.ipynb
+jupyter lab                         # open either notebook
 ```
 
 - The first run downloads prices from Yahoo Finance and caches them as CSV files in `notebooks/data/`
