@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.1 — 2026-09-23
+
+### Added
+- `phi4finance.risk`: `coupling_matrix` (scale-free couplings w_ij/√(μ_i μ_j)), `node_strength`,
+  `stress_matrix` (E[φ_j | φ_i = shock] by MCMC for every pair), `empirical_stress` (the same on the data's tail
+  days) and `var_es`. 3 new tests (56 total).
+- `notebooks/sp500_top20_riesgo.ipynb`: risk map of the 20 largest S&P 500 stocks over 10 years, 3 years and the
+  current year.
+
 ## 0.5.0 — 2026-09-23
 
 Changes proposed after running the notebooks on real data (Magnificent 7, Mar–Sep 2026).

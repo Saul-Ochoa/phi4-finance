@@ -117,6 +117,7 @@ summarize(res, benchmark="gauss_ewma")                    # MAE, CRPS, coverage,
 | `phi4finance/structure.py` | `Tying` (free, Toeplitz, lagged block-Toeplitz), `lag_embed_panel` |
 | `phi4finance/volatility.py` | `EWMAVol`, `GARCHVol`, `devolatilize` |
 | `phi4finance/backtest.py` | `walk_forward`, `summarize`, `GaussianVolForecaster`, `Phi4LaggedForecaster` |
+| `phi4finance/risk.py` | coupling network, node strength, conditional stress scenarios, VaR/ES |
 | `notebooks/` | reproduction of the paper |
 | `examples/` | 01 multi-stock fit, 02 next-day forecast, 03 imputation vs baseline R |
 | `tests/` | pytest suite: recovery of known couplings (PL and ML), gradient checks, exact vs MCMC |

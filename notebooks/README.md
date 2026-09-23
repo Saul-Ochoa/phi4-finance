@@ -5,6 +5,7 @@
 | `reproduce_bachtis2026.ipynb` | Reruns every empirical result of Bachtis, Berman & Schelpe (2026) — Fig. 1–6, 9 and 11 — with public Yahoo Finance data |
 | `mag7_ultimos_6_meses.ipynb` | (Spanish) The Magnificent 7 over the 6 months up to the run date: learned structure, rolling couplings, same-day imputation and next-day forecasts, all out of sample against OLS / zero / ridge / AR(1) baselines, plus the v0.5 distributional backtest (volatility
 filters, cross-asset lags, CRPS); exports a summary CSV to `results/` |
+| `sp500_top20_riesgo.ipynb` | (Spanish) Risk map of the 20 largest S&P 500 stocks over 10 years, 3 years and the current year: classic risk (vol, beta, drawdown, VaR/ES), the φ⁴ dependence network and its hubs, conditional contagion scenarios checked against the real stress days, and 1-day VaR/ES of an equal-weight portfolio; exports an Excel workbook to `results/` |
 
 ## Run
 

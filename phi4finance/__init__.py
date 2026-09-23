@@ -16,4 +16,4 @@ from .volatility import EWMAVol, GARCHVol, devolatilize
 __all__ = ["Phi4Model", "MetropolisSampler", "HeatBathSampler", "ConditionalDistribution",
            "RollingPhi4", "Scaler", "lag_embed", "lag_embed_panel", "Tying", "EWMAVol", "GARCHVol",
            "devolatilize", "load_prices", "load_returns"]
-__version__ = "0.5.0"
+__version__ = "0.5.1"
