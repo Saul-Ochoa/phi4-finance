@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.2 — 2026-09-23
+
+### Added
+- `phi4finance.earlywarning`: benchmark indicators (`average_correlation`, `absorption_ratio`), forward targets
+  (`forward_realized_vol`, `forward_max_drawdown`), `hac_ols` (Newey–West), `oos_r2` (expanding-window
+  out-of-sample R² with a gap for overlapping targets and a Clark–West p-value) and `auc`. 5 new tests (61 total).
+- `RollingPhi4` records scale-free indicators: `coupling_mean`, `coupling_absmean`, `hub_strength_max`, `log_mu_std`.
+- `notebooks/validacion_riesgo_sistemico.ipynb`: do φ⁴ indicators anticipate the next 20 days' volatility and
+  drawdown of the top-20 S&P 500 portfolio beyond current volatility, average correlation and the absorption ratio?
+
 ## 0.5.1 — 2026-09-23
 
 ### Added

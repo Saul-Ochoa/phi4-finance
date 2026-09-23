@@ -5,7 +5,9 @@ represented by a time evolution in model space").
 ``RollingPhi4`` fits one model per rolling window, warm-starting each fit from
 the previous couplings, and records for every window:
 
-* the couplings' summaries (<w_ij>, <|w_ij|>, <a_i>, mu, lambda);
+* the couplings' summaries (<w_ij>, <|w_ij|>, <a_i>, mu, lambda) and their
+  scale-free versions (mean of w_ij / sqrt(mu_i mu_j), strongest hub, spread
+  of log mu_i across assets);
 * market statistics of the data in the window (mean over days of the
   cross-sectional mean and kurtosis);
 * the same statistics computed on configurations sampled from the fitted
@@ -81,6 +83,14 @@ class RollingPhi4:
                    "lam_mean": float(m.lam.mean()),
                    "data_market_mean": float(market_mean(win).mean()),
                    "data_market_kurtosis": float(np.nanmean(market_kurtosis(win)))}
+            if np.all(m.mu > 0):                  # scale-free couplings w_ij / sqrt(mu_i mu_j)
+                Cf = m.W / np.sqrt(np.outer(m.mu, m.mu))
+                strength = np.abs(Cf).sum(axis=1) - np.abs(np.diag(Cf))
+                rec.update({"coupling_mean": float(Cf[iu].mean()), "coupling_absmean": float(np.abs(Cf[iu]).mean()),
+                            "hub_strength_max": float(strength.max()), "log_mu_std": float(np.log(m.mu).std())})
+            else:
+                rec.update({"coupling_mean": np.nan, "coupling_absmean": np.nan,
+                            "hub_strength_max": np.nan, "log_mu_std": np.nan})
             if self.n_samples > 0:
                 sims = np.asarray(sc.inverse_transform(m.sample(self.n_samples, burn=self.burn)))
                 rec["model_market_mean"] = float(market_mean(sims).mean())
