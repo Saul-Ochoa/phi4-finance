@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.3 — 2026-09-23
+
+### Changed
+- `validacion_riesgo_sistemico.ipynb`: horizons of 20 and 60 days, SPY as a second target next to the equal-weight
+  portfolio, and the standardised shifts of Kritzman et al. (2011) for the absorption ratio, the average correlation
+  and the φ⁴ coupling. Base B now also includes Δ absorption ratio. Results are summarised as heat maps over the 8
+  asset × horizon × target combinations; a cell is starred only when R² oos > 0 and the Clark–West p < 0.05.
+
 ## 0.5.2 — 2026-09-23
 
 ### Added
