@@ -74,6 +74,36 @@ class ConditionalDistribution:
         idx = rng.choice(self.grid.size, size=n, p=self.prob)
         return self.grid[idx] + (rng.random(n) - 0.5) * self.dx
 
+    # ---------------------------------------------------------------- scoring
+    def logpdf(self, y) -> float:
+        """Log density at y (piecewise constant per cell; -inf outside the grid)."""
+        lo = min(self.grid[0], self.grid[-1]) - self.dx / 2
+        k = np.floor((y - lo) / self.dx).astype(int) if np.ndim(y) else int(np.floor((y - lo) / self.dx))
+        order = np.argsort(self.grid)
+        p = self.prob[order] / self.dx
+        ok = (k >= 0) & (k < p.size)
+        out = np.where(ok, np.log(np.maximum(p[np.clip(k, 0, p.size - 1)], 1e-300)), -np.inf)
+        return float(out) if np.ndim(out) == 0 else out
+
+    def pit(self, y):
+        """Probability integral transform F(y); uniform on [0, 1] if the forecasts are calibrated."""
+        return self.cdf(y)
+
+    def crps(self, y) -> float:
+        """Continuous ranked probability score E|X - y| - E|X - X'| / 2 (lower is better),
+        treating each cell as a point mass at its centre."""
+        order = np.argsort(self.grid)
+        g, p = self.grid[order], self.prob[order]
+        C = np.cumsum(p)
+        e_xx = 2.0 * np.sum(p * g * (2.0 * C - p - 1.0))      # E|X - X'| for sorted point masses
+        return float(p @ np.abs(g - y) - 0.5 * e_xx)
+
+    @classmethod
+    def gaussian(cls, mean: float, std: float, n_grid: int = 801, width: float = 8.0):
+        """A normal distribution tabulated on +- ``width`` standard deviations."""
+        g = mean + std * np.linspace(-width, width, n_grid)
+        return cls(g, np.exp(-0.5 * ((g - mean) / std) ** 2))
+
     # ---------------------------------------------------------------- units
     def affine(self, scale, shift=0.0) -> "ConditionalDistribution":
         """Distribution of ``scale * X + shift``."""

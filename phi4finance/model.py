@@ -19,9 +19,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from .estimators import fit_pseudolikelihood
+from .estimators import fit_pseudolikelihood, penalty_weights
 from .inference import ConditionalDistribution, exact_conditional
 from .sampler import SAMPLERS
+from .structure import Tying
 
 try:  # optional progress bar
     from tqdm import trange as _trange
@@ -47,12 +48,15 @@ class Phi4Model:
         {"W", "a", "mu", "lam"}).
     sampler : ``"metropolis"`` (paper) or ``"heatbath"`` (exact Gibbs).
     n_chains : parallel MCMC chains used by ``fit(method="ml")`` and sampling.
+    tying : optional ``Tying`` saying which couplings / site parameters share a
+        value (e.g. ``Tying.toeplitz(V)`` for one stock's lags,
+        ``Tying.lagged(K, L)`` for K stocks over L days). Default: all free.
     """
 
     def __init__(self, n_stocks: int, lr: float = 5e-3, mu_global: bool = False,
                  lam_global: bool = True, proposal_range: float = 3.0, seed=0,
                  lam_min: float = 1e-4, freeze=(), sampler: str = "metropolis",
-                 n_chains: int = 32):
+                 n_chains: int = 32, tying=None):
         if n_stocks < 1:
             raise ValueError("n_stocks must be >= 1")
         if sampler not in SAMPLERS:
@@ -77,6 +81,11 @@ class Phi4Model:
         self.mu = np.full(self.V, 0.5)
         self.lam = np.full(self.V, 0.5)
         self.a = np.zeros(self.V)
+        self.tying = tying if tying is not None else Tying.free(self.V)
+        if self.tying.V != self.V:
+            raise ValueError(f"tying has V={self.tying.V}, model has V={self.V}")
+        if not self.tying.is_free:
+            self.W, self.a, self.mu, self.lam = self.tying.project(self.W, self.a, self.mu, self.lam)
         self.history: list[dict] = []
         self._chain = None
 
@@ -109,16 +118,22 @@ class Phi4Model:
         return {"W": gW, "a": q["phi"] - p["phi"], "mu": p["phi2"] - q["phi2"],
                 "lam": p["phi4"] - q["phi4"], "_q": q, "_p": p}
 
-    def _step(self, g, l2=0.0):
+    def _step(self, g, l2=0.0, scale=None):
+        t = self.tying
+        tie = (lambda v: t.expand_site(t.reduce_site(v))) if not t.is_free else (lambda v: v)
         if "W" not in self.freeze:
-            self.W += self.lr * (g["W"] - 2.0 * l2 * self.W)
+            S2 = 1.0 if scale is None else np.outer(scale, scale) ** 2
+            gW = g["W"] - 2.0 * l2 * S2 * self.W
+            if not t.is_free:
+                gW = t.expand_w(t.reduce_w(gW))
+            self.W += self.lr * gW
             self._sym()
         if "a" not in self.freeze:
-            self.a += self.lr * g["a"]
+            self.a += self.lr * tie(g["a"])
         if "mu" not in self.freeze:
-            self.mu += self.lr * (g["mu"].mean() if self.mu_global else g["mu"])
+            self.mu += self.lr * (g["mu"].mean() if self.mu_global else tie(g["mu"]))
         if "lam" not in self.freeze:
-            self.lam += self.lr * (g["lam"].mean() if self.lam_global else g["lam"])
+            self.lam += self.lr * (g["lam"].mean() if self.lam_global else tie(g["lam"]))
             np.maximum(self.lam, self.lam_min, out=self.lam)
 
     @staticmethod
@@ -133,13 +148,17 @@ class Phi4Model:
     # ------------------------------------------------------------ training
     def fit(self, data, method: str = "pl", epochs: int = 300, mcmc_steps: int = 100,
             batch_size=None, burn=None, persistent: bool = True, l2: float = 0.0,
-            n_grid: int = 201, maxiter: int = 500, verbose: bool = True):
+            penalty_scale: str = "std", n_grid: int = 201, maxiter: int = 500,
+            verbose: bool = True):
         """Fit the couplings to ``data`` of shape (N, V) in model units.
 
         Parameters
         ----------
         method : ``"pl"`` (pseudo-likelihood, default) or ``"ml"`` (MCMC).
-        l2 : penalty l2 * sum_{i<j} w_ij^2 (both methods).
+        l2 : penalty l2 * sum_{i<j} (s_i s_j w_ij)^2 (both methods).
+        penalty_scale : ``"std"`` (default) sets s_i to the data's standard
+            deviation, so ``l2`` does not depend on how the data were scaled;
+            ``"none"`` sets s_i = 1 (the v0.4 penalty).
         n_grid, maxiter : quadrature cells per site and L-BFGS iterations (``"pl"``).
         epochs : gradient steps (``"ml"``).
         mcmc_steps : sweeps of each chain per epoch, burn-in included (``"ml"``).
@@ -155,7 +174,8 @@ class Phi4Model:
         """
         data = self._check_data(data, self.V)
         if method == "pl":
-            self.fit_result_ = fit_pseudolikelihood(self, data, l2=l2, n_grid=n_grid, maxiter=maxiter)
+            self.fit_result_ = fit_pseudolikelihood(self, data, l2=l2, n_grid=n_grid, maxiter=maxiter,
+                                                    penalty_scale=penalty_scale)
             self._chain = None
             if verbose:
                 r = self.fit_result_
@@ -165,6 +185,7 @@ class Phi4Model:
             raise ValueError("method must be 'pl' or 'ml'")
 
         N = data.shape[0]
+        scale = penalty_weights(data, penalty_scale)
         bs = N if batch_size is None or batch_size >= N else int(batch_size)
         it = _trange(epochs) if (verbose and _trange is not None) else range(epochs)
         for epoch in it:
@@ -178,7 +199,7 @@ class Phi4Model:
                                init=None if fresh else self._chain)
             self._chain = s.last_state
             g = self.gradients(batch, samples)
-            self._step(g, l2=l2)
+            self._step(g, l2=l2, scale=scale)
             q, p = g["_q"], g["_p"]
             rec = {"method": "ml", "epoch": epoch, "m_data": q["m"], "m_model": p["m"],
                    "chi_data": q["chi"], "chi_model": p["chi"],
@@ -285,5 +306,6 @@ class Phi4Model:
 
     def __repr__(self):
         return (f"Phi4Model(V={self.V}, sampler={self.sampler_kind!r}, n_chains={self.n_chains}, "
+                f"tying={'free' if self.tying.is_free else f'{self.tying.n_w} coupling groups'}, "
                 f"mu_global={self.mu_global}, lam_global={self.lam_global}, "
                 f"history={len(self.history)})")

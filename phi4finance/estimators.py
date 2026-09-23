@@ -27,17 +27,18 @@ from .inference import site_grid
 
 
 class _Packer:
-    """Maps the free parameters of a Phi4Model to and from one flat vector."""
+    """Maps the free parameters of a Phi4Model (respecting its ``tying``,
+    ``mu_global``, ``lam_global`` and ``freeze``) to and from one flat vector."""
 
-    def __init__(self, V, mu_global, lam_global, freeze):
-        self.V = V
-        self.iu = np.triu_indices(V, 1)
-        self.groups = []
-        sizes = {"W": len(self.iu[0]), "a": V, "mu": 1 if mu_global else V,
-                 "lam": 1 if lam_global else V}
-        start = 0
+    def __init__(self, tying, mu_global, lam_global, freeze):
+        self.t = tying
+        self.V = tying.V
+        self.iu = tying.iu
+        sizes = {"W": tying.n_w, "a": tying.n_site, "mu": 1 if mu_global else tying.n_site,
+                 "lam": 1 if lam_global else tying.n_site}
+        self.groups, start = [], 0
         for g in ("W", "a", "mu", "lam"):
-            if g in freeze:
+            if g in freeze or sizes[g] == 0:
                 continue
             self.groups.append((g, start, start + sizes[g]))
             start += sizes[g]
@@ -47,23 +48,34 @@ class _Packer:
         parts = []
         for g, s, e in self.groups:
             if g == "W":
-                parts.append(p["W"][self.iu])
+                parts.append(self.t.reduce_w(p["W"], "mean"))
             elif e - s == 1:
                 parts.append([np.mean(p[g])])
             else:
-                parts.append(p[g])
+                parts.append(self.t.reduce_site(p[g], "mean"))
         return np.concatenate(parts) if parts else np.empty(0)
 
     def unpack(self, x, base):
         p = {k: np.array(v, dtype=float) for k, v in base.items()}
         for g, s, e in self.groups:
             if g == "W":
-                W = np.zeros((self.V, self.V))
-                W[self.iu] = x[s:e]
-                p["W"] = W + W.T
+                p["W"] = self.t.expand_w(x[s:e])
+            elif e - s == 1:
+                p[g] = np.full(self.V, x[s])
             else:
-                p[g] = np.broadcast_to(x[s:e], (self.V,)).copy()
+                p[g] = self.t.expand_site(x[s:e])
         return p
+
+    def flat_grad(self, g):
+        out = []
+        for name, s, e in self.groups:
+            if name == "W":
+                out.append(self.t.reduce_w(g["W"]))
+            elif e - s == 1:
+                out.append([g[name].sum()])
+            else:
+                out.append(self.t.reduce_site(g[name]))
+        return np.concatenate(out)
 
     def bounds(self, lam_min):
         b = []
@@ -72,9 +84,26 @@ class _Packer:
         return b
 
 
-def neg_pseudo_loglik(p, X, grid, l2=0.0, chunk_elems=4_000_000):
-    """Mean negative pseudo-log-likelihood per data row and its gradient
-    (dict with keys W, a, mu, lam, each full-size)."""
+def penalty_weights(X, how: str = "std"):
+    """Per-site scale s_i of the L2 penalty l2 * sum_{i<j} (s_i s_j w_ij)^2.
+
+    ``"std"`` uses the data's standard deviation, so the penalty acts on the
+    couplings of standardised data and a given ``l2`` means the same thing
+    whatever the scaling of the inputs. ``"none"`` penalises raw w_ij (v0.4).
+    """
+    X = np.asarray(X, float)
+    if how == "none":
+        return np.ones(X.shape[1])
+    if how == "std":
+        s = X.std(axis=0)
+        return np.where(s > 0, s, 1.0)
+    raise ValueError("penalty_scale must be 'std' or 'none'")
+
+
+def neg_pseudo_loglik(p, X, grid, l2=0.0, scale=None, chunk_elems=4_000_000):
+    """Mean negative pseudo-log-likelihood per data row plus the penalty
+    l2 * sum_{i<j} (s_i s_j w_ij)^2 (``scale`` = s, default ones), and the
+    gradient (dict with keys W, a, mu, lam, each full-size)."""
     N, V = X.shape
     W, a, mu, lam = p["W"], p["a"], p["mu"], p["lam"]
     g1, g2, g4 = grid, grid**2, grid**4
@@ -119,20 +148,22 @@ def neg_pseudo_loglik(p, X, grid, l2=0.0, chunk_elems=4_000_000):
     gW = 2.0 * (R_T_X + R_T_X.T)
     np.fill_diagonal(gW, 0.0)
     # dPL/dw_ij for the tied pair (i<j) is gW[i, j]; the penalty acts on each pair once
-    f = -total / N + l2 * float((W[np.triu_indices(V, 1)] ** 2).sum())
-    grads = {"W": -gW / N + 2.0 * l2 * W, "a": -ga / N, "mu": -gmu / N, "lam": -glam / N}
+    S2 = np.ones((V, V)) if scale is None else np.outer(scale, scale) ** 2
+    f = -total / N + l2 * float((S2 * W**2)[np.triu_indices(V, 1)].sum())
+    grads = {"W": -gW / N + 2.0 * l2 * S2 * W, "a": -ga / N, "mu": -gmu / N, "lam": -glam / N}
     return f, grads
 
 
-def fit_pseudolikelihood(model, X, l2=0.0, n_grid=201, maxiter=500, tol=1e-7):
+def fit_pseudolikelihood(model, X, l2=0.0, n_grid=201, maxiter=500, tol=1e-7, penalty_scale="std"):
     """Fit ``model``'s free couplings to ``X`` (N, V) by maximum
     pseudo-likelihood with L-BFGS-B, starting from its current values.
-    Respects ``mu_global``, ``lam_global``, ``freeze`` and ``lam_min``.
+    Respects ``tying``, ``mu_global``, ``lam_global``, ``freeze`` and
+    ``lam_min``; the L2 penalty is scaled per ``penalty_scale``.
     Returns the scipy ``OptimizeResult``; per-iteration objective values
     are appended to ``model.history``.
     """
     X = np.asarray(X, dtype=float)
-    packer = _Packer(model.V, model.mu_global, model.lam_global, model.freeze)
+    packer = _Packer(model.tying, model.mu_global, model.lam_global, model.freeze)
     if packer.size == 0:
         raise ValueError("every parameter group is frozen; nothing to fit")
     base = model.params()
@@ -141,21 +172,19 @@ def fit_pseudolikelihood(model, X, l2=0.0, n_grid=201, maxiter=500, tol=1e-7):
         raise ValueError("data fall outside the sampled support [-r/2, r/2]; "
                          "rescale the data or increase proposal_range")
 
+    if model.lam_min < 0:
+        import warnings
+        warnings.warn("lam_min < 0 with pseudo-likelihood: PL only checks one-site conditionals near the "
+                      "data and can accept couplings whose joint distribution piles up at the support edges. "
+                      "Check samples, or use method='ml'.")
+    scale = penalty_weights(X, penalty_scale)
     cache = {}
 
     def fun(x):
         p = packer.unpack(x, base)
-        f, g = neg_pseudo_loglik(p, X, grid, l2=l2)
+        f, g = neg_pseudo_loglik(p, X, grid, l2=l2, scale=scale)
         cache["x"], cache["f"] = x.copy(), f
-        flat = []
-        for name, s, e in packer.groups:
-            if name == "W":
-                flat.append(g["W"][packer.iu])
-            elif e - s == 1:
-                flat.append([g[name].sum()])
-            else:
-                flat.append(g[name])
-        return f, np.concatenate(flat)
+        return f, packer.flat_grad(g)
 
     start = len(model.history)
 

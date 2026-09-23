@@ -70,3 +70,31 @@ def coverage(truth, lower, upper) -> float:
 def hit_rate(pred, truth) -> float:
     """Share of days where the forecast has the sign of the outcome."""
     return float(np.mean(np.sign(np.asarray(pred, float)) == np.sign(np.asarray(truth, float))))
+
+
+# ---------------------------------------------------------------- distributional scores
+def crps_gaussian(mean, std, y):
+    """Closed-form CRPS of N(mean, std^2) at y (vectorised)."""
+    from scipy.stats import norm
+    z = (np.asarray(y, float) - mean) / std
+    return std * (z * (2 * norm.cdf(z) - 1) + 2 * norm.pdf(z) - 1 / np.sqrt(np.pi))
+
+
+def diebold_mariano(loss_a, loss_b, h: int = 1):
+    """Diebold-Mariano test of equal expected loss for two forecast series.
+
+    d_t = loss_a - loss_b; the variance of mean(d) uses a Newey-West estimate
+    with h - 1 lags. Returns (statistic, two-sided p-value); a negative
+    statistic means ``a`` has the lower loss.
+    """
+    from scipy.stats import norm
+    d = np.asarray(loss_a, float) - np.asarray(loss_b, float)
+    n = d.size
+    dc = d - d.mean()
+    var = dc @ dc / n
+    for k in range(1, h):
+        var += 2 * (1 - k / h) * (dc[k:] @ dc[:-k]) / n
+    if var <= 0:
+        return 0.0, 1.0
+    stat = d.mean() / np.sqrt(var / n)
+    return float(stat), float(2 * (1 - norm.cdf(abs(stat))))

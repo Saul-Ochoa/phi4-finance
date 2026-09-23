@@ -74,6 +74,31 @@ penalty (`l2=`) chosen on validation data is essential.
 paper's numbers next to the reproduced ones and extra baselines (zero forecast, OLS, ridge AR). See
 `notebooks/README.md`.
 
+## Beyond the paper (v0.5)
+
+```python
+from phi4finance import Tying
+from phi4finance.backtest import GaussianVolForecaster, Phi4LaggedForecaster, walk_forward, summarize
+
+forecasters = {
+    "gauss_ewma": GaussianVolForecaster("ewma"),          # N(0, sigma^2_{t+1|t}): the benchmark
+    "gauss_garch": GaussianVolForecaster("garch"),
+    "phi4_cross": Phi4LaggedForecaster(n_lags=5),         # all stocks' last 5 days, block-Toeplitz
+}
+res = walk_forward(returns, forecasters, start="2026-03-23", refit_every=10, train_window=250)
+summarize(res, benchmark="gauss_ewma")                    # MAE, CRPS, coverage, Diebold-Mariano
+```
+
+- **Scale-free L2** (`penalty_scale="std"`, default): the penalty acts on couplings of standardised data, so one
+  grid of `l2` values works whatever the scaling.
+- **Tying** (`Tying.toeplitz`, `Tying.lagged`): stationarity in time as shared couplings; a 7-stock, 5-lag model
+  has 224 coupling groups instead of 630 free pairs.
+- **Volatility filters** (`EWMAVol`, `GARCHVol`, `devolatilize`): fit φ⁴ to r / σ_{t|t−1}.
+- **Distributional scores**: `ConditionalDistribution.crps / logpdf / pit`, `crps_gaussian`, `diebold_mariano`.
+- **Backtest**: `walk_forward` + `summarize`; `select_l2(folds=k, metric="crps")` for blocked CV.
+
+`notebooks/mag7_ultimos_6_meses.ipynb` applies all of it to the Magnificent 7.
+
 ## Structure
 
 | Module | Contents |
@@ -88,7 +113,10 @@ paper's numbers next to the reproduced ones and extra baselines (zero forecast, 
 | `phi4finance/scaling.py` | finite-size scaling exponents `k_w`, `k_a` (Section 3.3) |
 | `phi4finance/rolling.py` | `RollingPhi4`: one theory per date, warm-started, with sampled market statistics |
 | `phi4finance/baselines.py` | baseline R (eq. 10), OLS, rolling AR, ridge AR |
-| `phi4finance/validation.py` | `select_l2`: L2 penalty chosen on held-out rows |
+| `phi4finance/validation.py` | `select_l2`: L2 chosen on held-out rows or blocked CV, by MAE or CRPS |
+| `phi4finance/structure.py` | `Tying` (free, Toeplitz, lagged block-Toeplitz), `lag_embed_panel` |
+| `phi4finance/volatility.py` | `EWMAVol`, `GARCHVol`, `devolatilize` |
+| `phi4finance/backtest.py` | `walk_forward`, `summarize`, `GaussianVolForecaster`, `Phi4LaggedForecaster` |
 | `notebooks/` | reproduction of the paper |
 | `examples/` | 01 multi-stock fit, 02 next-day forecast, 03 imputation vs baseline R |
 | `tests/` | pytest suite: recovery of known couplings (PL and ML), gradient checks, exact vs MCMC |
@@ -103,5 +131,6 @@ pytest
 
 ## Status
 
-v0.4.0 adds the tools and the notebook to reproduce the paper (see `CHANGELOG.md`). Next (v0.5): Toeplitz couplings
-for the time-lag model, stronger regularization and a full backtest module.
+v0.5.0 adds the scale-free penalty, parameter tying, volatility filters, distributional scores and a walk-forward
+backtest (see `CHANGELOG.md`). On the Magnificent 7 over Mar–Sep 2026 the φ⁴ forecasters did not beat a Gaussian
+with GARCH volatility; the notebook shows the numbers.

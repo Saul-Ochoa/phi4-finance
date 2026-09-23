@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.5.0 — 2026-09-23
+
+Changes proposed after running the notebooks on real data (Magnificent 7, Mar–Sep 2026).
+
+### Added
+- **Scale-free L2 penalty** (`fit(..., penalty_scale="std")`, default): l2 · Σ (s_i s_j w_ij)² with s = the data's
+  standard deviation, so the penalty acts on standardised couplings and does not depend on how the data were scaled.
+  `penalty_scale="none"` restores the 0.4 penalty. The default `select_l2` grid is now decades from 0.01 to 10⁴.
+- **Parameter tying** (`phi4finance.structure`): `Tying.free`, `Tying.toeplitz` (one stock's lags,
+  w_ij = w(|i − j|)), `Tying.lagged` (several stocks over several days, block-Toeplitz with lead–lag direction),
+  `lag_embed_panel`. `Phi4Model(tying=...)`; pseudo-likelihood and ML both fit one parameter per group.
+- **Volatility filters** (`phi4finance.volatility`): `EWMAVol` (RiskMetrics), `GARCHVol` (GARCH(1,1) QMLE),
+  `devolatilize`; one-step-ahead σ_{t|t−1}, no look-ahead.
+- **Distributional scores**: `ConditionalDistribution.crps / logpdf / pit / gaussian`, `metrics.crps_gaussian`,
+  `metrics.diebold_mariano` (Newey–West).
+- **Backtest** (`phi4finance.backtest`): `walk_forward`, `summarize`, `GaussianVolForecaster` (N(0, σ²) with
+  EWMA or GARCH) and `Phi4LaggedForecaster` (φ⁴ on r/σ over n lags of one or all stocks, L2 by blocked CV on CRPS,
+  biases fixed at 0 by default).
+- `select_l2(folds=k, metric="crps")`: blocked cross-validation and CRPS as the selection metric.
+- A warning when `lam_min < 0` is used with pseudo-likelihood.
+- 12 new tests (53 total).
+
+### Changed
+- Notebooks: loader prints only the library's own notes (no yfinance "unclosed database" noise).
+- `mag7_ultimos_6_meses.ipynb`: §2 without penalty and in partial-correlation units; §4 adds φ⁴ on EWMA-standardised
+  returns; §5 chooses L2 by blocked CV with a = 0; new §6 runs the v0.5 backtest.
+- `reproduce_bachtis2026.ipynb`: §3.5 chooses L2 by blocked CV.
+
+### Results on real data (Magnificent 7, 127 days to 22 Sep 2026)
+- Structure: without the penalty, the model's implied partial correlations w_ij/√(μ_i μ_j) equal the sample ones
+  (r = 1.00; signs agree on 100% of pairs). The 0.4 notebook's fixed L2 had made the signs follow plain correlations.
+- Imputation: with λ at its floor φ⁴ equals OLS exactly. The EWMA filter lifts 90%-interval coverage from 86% to
+  91%; days with idiosyncratic jumps (earnings) are still missed by every method.
+- Next-day forecasts: GARCH beats EWMA on CRPS (ratio 0.989, DM p < 0.001). φ⁴ with 5 lags of all stocks: 1.006,
+  own lags only: 1.009 (both significantly worse on CRPS, better coverage and log score); cross-validation pushed
+  L2 to the top of the grid for most stocks, i.e. the lags carry no usable signal in this period. The paper's
+  150-lag set-up went from φ⁴/zero = 1.007 to 1.003 (p = 0.60) with blocked CV and a = 0.
+
 ## 0.4.0 — 2026-09-22
 
 Reproduction release: everything needed to rerun the paper with public data.
