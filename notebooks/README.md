@@ -1,33 +1,21 @@
 # Notebooks
 
-| Notebook | What it does |
+| Notebook | Qué hace |
 | --- | --- |
-| `reproduce_bachtis2026.ipynb` | Reruns every empirical result of Bachtis, Berman & Schelpe (2026) — Fig. 1–6, 9 and 11 — with public Yahoo Finance data |
-| `mag7_ultimos_6_meses.ipynb` | (Spanish) The Magnificent 7 over the 6 months up to the run date: learned structure, rolling couplings, same-day imputation and next-day forecasts, all out of sample against OLS / zero / ridge / AR(1) baselines, plus the v0.5 distributional backtest (volatility
-filters, cross-asset lags, CRPS); exports a summary CSV to `results/` |
-| `sp500_top20_riesgo.ipynb` | (Spanish) Risk map of the 20 largest S&P 500 stocks over 10 years, 3 years and the current year: classic risk (vol, beta, drawdown, VaR/ES), the φ⁴ dependence network and its hubs, conditional contagion scenarios checked against the real stress days, and 1-day VaR/ES of an equal-weight portfolio; exports an Excel workbook to `results/` |
-| `validacion_riesgo_sistemico.ipynb` | (Spanish) Early-warning test: do φ⁴ indicators (mean coupling, top hub, μ dispersion, model kurtosis) predict the next 20 days' volatility and drawdown out of sample, beyond current volatility, average correlation and the absorption ratio? Writes its own verdict |
+| `validacion_riesgo_sistemico.ipynb` | ¿Sirve el φ⁴ como alerta temprana? Compara, fuera de muestra, cuatro indicadores φ⁴ (acoplamiento medio, mayor hub, dispersión de log μ, curtosis del modelo) y el cambio del acoplamiento con la volatilidad actual, la correlación media y el absorption ratio de Kritzman, para anticipar la volatilidad y la caída máxima de los próximos 20 y 60 días de un portafolio de las 20 mayores acciones del S&P 500 y del SPY. Se publica con las salidas de la corrida del 23-sep-2026 y escribe su propio veredicto. |
 
-## Run
+Las conclusiones están resumidas en [docs/conclusiones.md](../docs/conclusiones.md).
+
+## Correrlo
 
 ```bash
-pip install -e ".[notebooks]"      # from the repository root
+pip install -e ".[notebooks]"      # desde la raíz del repositorio
 cd notebooks
-jupyter lab                         # open either notebook
+jupyter lab validacion_riesgo_sistemico.ipynb
 ```
 
-- The first run downloads prices from Yahoo Finance and caches them as CSV files in `notebooks/data/`
-  (ignored by git). Later runs read the cache; delete the folder to re-download.
-- `FULL = False` (default) runs reduced settings; `FULL = True` uses the paper's iteration counts and one fit per
-  day in §3.1, which takes hours.
-- `METHOD = "pl"` (default) uses pseudo-likelihood; `METHOD = "ml"` uses the paper's MCMC maximum likelihood and is
-  much slower.
-
-## What differs from the paper
-
-The notebook lists every deviation at the top and in each section. In short: Yahoo adjusted closes instead of
-WRDS data, pseudo-likelihood instead of MCMC likelihood by default, L2 chosen on 10 held-out rows instead of early
-stopping, an assumed list of 64 stocks for the scaling analysis, no LSTM baseline, and extra baselines (zero,
-training mean, OLS, ridge AR) plus two no-fit benchmarks for the scaling exponents.
-
-The notebook is committed without outputs: every number in it is produced by your own run.
+- La primera corrida descarga ~11 años de precios de Yahoo Finance y los guarda como CSV en `notebooks/data/`
+  (ignorado por git). Las siguientes leen la caché; borra la carpeta para descargar de nuevo.
+- Tarda unos minutos. `FULL = True` recalcula los indicadores cada 5 días en lugar de cada 10.
+- El resultado se guarda como Excel en `notebooks/results/` (ignorado por git).
+- La lista de 20 acciones está al inicio del notebook; revísala si lo corres meses después.

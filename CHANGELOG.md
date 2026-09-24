@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.4 — 2026-09-24
+
+### Documentation
+- README rewritten (in Spanish): what the library is for, what it is not for, quick start, modules.
+- `docs/metodologia.md`, `docs/proceso.md`, `docs/conclusiones.md`: model and evaluation method, development history,
+  and the results on real data with the final verdict.
+- `LICENSE` (MIT).
+
+### Changed
+- Only `notebooks/validacion_riesgo_sistemico.ipynb` is published, with the outputs of the 23-sep-2026 run. The
+  reproduction, Magnificent 7 and risk-map notebooks mentioned in earlier entries are kept out of the repository.
+- The validation notebook no longer uses `DataFrame.query` (it failed on Python 3.13 with column names such as
+  "R² oos").
+
 ## 0.5.3 — 2026-09-23
 
 ### Changed

@@ -14,3 +14,6 @@ paper/
 # Yahoo price cache written by the notebooks
 notebooks/data/
 notebooks/results/
+# Only the early-warning validation notebook is published; the others stay local
+notebooks/*.ipynb
+!notebooks/validacion_riesgo_sistemico.ipynb
